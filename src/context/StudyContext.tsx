@@ -47,6 +47,8 @@ interface StudyContextType {
   recordStudySession: (id: string) => void;
   scheduleNextReview: (id: string) => void;
   getSubjectsForReview: (date: string) => Subject[];
+  clearSchedule: () => void; // Nova função
+  clearScheduleDay: (date: string) => void; // Nova função
 }
 
 // Valores iniciais
@@ -228,6 +230,16 @@ export const StudyProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     setSchedule(newSchedule);
   }, [config, subjects, setSchedule]);
 
+  // Novas funções para limpar o cronograma
+  const clearSchedule = useCallback(() => {
+    setSchedule([]);
+  }, [setSchedule]);
+
+  const clearScheduleDay = useCallback((date: string) => {
+    setSchedule(prev => prev.filter(entry => entry.date !== date));
+  }, [setSchedule]);
+
+
   const value = {
     subjects,
     config,
@@ -240,6 +252,8 @@ export const StudyProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     recordStudySession,
     scheduleNextReview,
     getSubjectsForReview,
+    clearSchedule, // Adicionado ao contexto
+    clearScheduleDay, // Adicionado ao contexto
   };
 
   return <StudyContext.Provider value={value}>{children}</StudyContext.Provider>;

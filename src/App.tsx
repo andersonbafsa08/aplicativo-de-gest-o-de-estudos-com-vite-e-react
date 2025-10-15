@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { StudyProvider } from './context/StudyContext';
-import Layout from './components/Layout'; // Layout agora gerencia a sidebar e o header
+import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import ImportSubjects from './pages/ImportSubjects';
 import Configuration from './pages/Configuration';
@@ -31,7 +31,6 @@ const App: React.FC = () => {
   return (
     <Router>
       <StudyProvider>
-        {/* O Layout agora envolve as rotas e gerencia a sidebar, header e footer */}
         <Layout openReviewModal={openReviewModal}>
           <Routes>
             <Route path="/" element={<Dashboard />} />
@@ -39,7 +38,7 @@ const App: React.FC = () => {
             <Route path="/configuracao" element={<Configuration />} />
             <Route path="/progresso" element={<ProgressReview openQuestionControlModal={openQuestionControlModal} />} />
             <Route path="/cronograma" element={<Schedule />} />
-            <Route path="/dashboard" element={<Dashboard />} /> {/* Adicionado rota explícita para dashboard */}
+            {/* Rota /dashboard removida */}
           </Routes>
         </Layout>
 

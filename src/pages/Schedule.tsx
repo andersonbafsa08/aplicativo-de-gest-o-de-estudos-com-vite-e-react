@@ -1,11 +1,11 @@
 import React from 'react';
 import { useStudy } from '../context/StudyContext';
 import Card from '../components/Card';
-import { Download, CalendarDays, BookOpen, CheckCircle, Clock, FileText } from 'lucide-react';
+import { Download, CalendarDays, BookOpen, CheckCircle, Clock, FileText, Trash2 } from 'lucide-react'; // Adicionado Trash2
 import jsPDF from 'jspdf';
 
 const Schedule: React.FC = () => {
-  const { schedule, subjects } = useStudy();
+  const { schedule, subjects, clearSchedule, clearScheduleDay } = useStudy(); // Adicionado clearSchedule e clearScheduleDay
 
   const getSubjectDetails = (id: string) => {
     return subjects.find(s => s.id === id);
@@ -20,6 +20,20 @@ const Schedule: React.FC = () => {
       }
     }
     return { text: '', color: '' };
+  };
+
+  const handleClearSchedule = () => {
+    if (window.confirm('Tem certeza que deseja limpar todo o cronograma? Esta ação é irreversível.')) {
+      clearSchedule();
+      alert('Cronograma limpo com sucesso!');
+    }
+  };
+
+  const handleClearDay = (date: string) => {
+    if (window.confirm(`Tem certeza que deseja limpar o cronograma para o dia ${new Date(date).toLocaleDateString('pt-BR')}?`)) {
+      clearScheduleDay(date);
+      alert(`Cronograma para ${new Date(date).toLocaleDateString('pt-BR')} limpo com sucesso!`);
+    }
   };
 
   const exportScheduleToPDF = () => {
@@ -70,20 +84,38 @@ const Schedule: React.FC = () => {
           <p className="text-textSecondary italic">Nenhum cronograma gerado ainda. Vá para a tela de Configuração para gerar um.</p>
         ) : (
           <>
-            <button
-              onClick={exportScheduleToPDF}
-              className="mb-6 w-full bg-accent text-white py-3 px-6 rounded-xl text-lg font-semibold hover:bg-fuchsia-600 transition-all duration-300 flex items-center justify-center shadow-lg hover:shadow-glow-primary"
-            >
-              <Download className="w-5 h-5 mr-2" />
-              Exportar para PDF
-            </button>
+            <div className="flex flex-col sm:flex-row gap-4 mb-6">
+              <button
+                onClick={exportScheduleToPDF}
+                className="flex-1 bg-accent text-white py-3 px-6 rounded-xl text-lg font-semibold hover:bg-fuchsia-600 transition-all duration-300 flex items-center justify-center shadow-lg hover:shadow-glow-primary"
+              >
+                <Download className="w-5 h-5 mr-2" />
+                Exportar para PDF
+              </button>
+              <button
+                onClick={handleClearSchedule}
+                className="flex-1 bg-error text-white py-3 px-6 rounded-xl text-lg font-semibold hover:bg-red-700 transition-all duration-300 flex items-center justify-center shadow-lg"
+              >
+                <Trash2 className="w-5 h-5 mr-2" />
+                Limpar Todo Cronograma
+              </button>
+            </div>
             <div className="space-y-6">
               {schedule.map((entry) => (
                 <div key={entry.date} className="bg-surface p-5 rounded-xl border border-border shadow-md animate-slide-in-left">
-                  <h3 className="text-xl font-semibold text-primary mb-3 flex items-center">
-                    <CalendarDays className="w-5 h-5 mr-2" />
-                    {new Date(entry.date).toLocaleDateString('pt-BR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-                  </h3>
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-xl font-semibold text-primary flex items-center">
+                      <CalendarDays className="w-5 h-5 mr-2" />
+                      {new Date(entry.date).toLocaleDateString('pt-BR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                    </h3>
+                    <button
+                      onClick={() => handleClearDay(entry.date)}
+                      className="text-textSecondary hover:text-error transition-colors duration-200 p-2 rounded-md hover:bg-red-900/20"
+                      aria-label={`Limpar cronograma para ${new Date(entry.date).toLocaleDateString('pt-BR')}`}
+                    >
+                      <Trash2 className="w-5 h-5" />
+                    </button>
+                  </div>
                   {entry.subjects.length === 0 ? (
                     <p className="text-textSecondary">Nenhum assunto agendado para este dia.</p>
                   ) : (

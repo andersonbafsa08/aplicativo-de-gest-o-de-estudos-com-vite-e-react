@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { useStudy } from '../context/StudyContext';
 import Card from '../components/Card';
-import { PlusCircle, XCircle, CheckCircle, UploadCloud, FileText } from 'lucide-react';
+import { PlusCircle, XCircle, CheckCircle, UploadCloud, FileText, AlertCircle } from 'lucide-react'; // Adicionado AlertCircle
 import * as XLSX from 'xlsx';
 import * as pdfjs from 'pdfjs-dist';
 
@@ -11,15 +11,28 @@ pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pd
 const ImportSubjects: React.FC = () => {
   const { importSubjects, removeSubject, subjects } = useStudy();
   const [subjectInput, setSubjectInput] = useState('');
-  const [materiaInput, setMateriaInput] = useState(''); // Novo estado para a matéria
+  const [materiaInput, setMateriaInput] = useState('');
+  const [feedbackMessage, setFeedbackMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null); // Estado para feedback visual
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const showFeedback = (type: 'success' | 'error', text: string) => {
+    setFeedbackMessage({ type, text });
+    setTimeout(() => setFeedbackMessage(null), 5000); // Esconde a mensagem após 5 segundos
+  };
 
   const handleImport = () => {
     if (subjectInput.trim()) {
       const newSubjects = subjectInput.split('\n').map(s => s.trim()).filter(s => s.length > 0);
-      importSubjects(newSubjects, materiaInput.trim() || 'Geral'); // Passa a matéria
-      setSubjectInput('');
-      setMateriaInput(''); // Limpa o campo da matéria após a importação manual
+      if (newSubjects.length > 0) {
+        importSubjects(newSubjects, materiaInput.trim() || 'Geral');
+        setSubjectInput('');
+        setMateriaInput('');
+        showFeedback('success', `${newSubjects.length} assuntos importados com sucesso!`);
+      } else {
+        showFeedback('error', 'Nenhum assunto válido para importar do texto.');
+      }
+    } else {
+      showFeedback('error', 'Por favor, insira assuntos no campo de texto.');
     }
   };
 
@@ -28,57 +41,51 @@ const ImportSubjects: React.FC = () => {
     if (!file) return;
 
     let newSubjects: string[] = [];
-    const currentMateria = materiaInput.trim() || 'Geral'; // Usa a matéria do input ou 'Geral'
+    const currentMateria = materiaInput.trim() || 'Geral';
 
-    if (file.name.endsWith('.csv')) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const text = e.target?.result as string;
+    try {
+      if (file.name.endsWith('.csv')) {
+        const text = await file.text();
         newSubjects = text.split('\n').map(s => s.trim()).filter(s => s.length > 0);
-        if (newSubjects.length > 0) {
-          importSubjects(newSubjects, currentMateria);
-        }
-      };
-      reader.readAsText(file);
-    } else if (file.name.endsWith('.xlsx')) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const data = e.target?.result;
+      } else if (file.name.endsWith('.xlsx')) {
+        const data = await file.arrayBuffer();
         const workbook = XLSX.read(data, { type: 'array' });
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
         const json = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as string[][];
         newSubjects = json.slice(1).map(row => row[0]?.toString().trim()).filter(s => s && s.length > 0) as string[];
-        if (newSubjects.length > 0) {
-          importSubjects(newSubjects, currentMateria);
-        }
-      };
-      reader.readAsArrayBuffer(file);
-    } else if (file.name.endsWith('.pdf')) {
-      const reader = new FileReader();
-      reader.onload = async (e) => {
-        const data = e.target?.result as ArrayBuffer;
+      } else if (file.name.endsWith('.pdf')) {
+        const data = await file.arrayBuffer();
         const pdf = await pdfjs.getDocument({ data }).promise;
-        let fullText = '';
+        let extractedTopics: string[] = [];
         for (let i = 1; i <= pdf.numPages; i++) {
           const page = await pdf.getPage(i);
           const textContent = await page.getTextContent();
-          fullText += textContent.items.map((item: any) => item.str).join(' ') + '\n';
+          const pageItems = textContent.items.map((item: any) => item.str.trim()).filter(str => str.length > 0);
+
+          // Heurística simples para identificar tópicos: linhas com menos de 100 caracteres
+          // Para identificação avançada de tópicos, seria necessária uma integração com IA/NLP.
+          const topicsOnPage = pageItems.filter(str => str.length > 0 && str.length < 100 && !/^\d+$/.test(str)); // Ignora números puros
+          extractedTopics.push(...topicsOnPage);
         }
-        // Simplesmente divide o texto por linhas para obter assuntos
-        newSubjects = fullText.split('\n').map(s => s.trim()).filter(s => s.length > 0);
-        if (newSubjects.length > 0) {
-          importSubjects(newSubjects, currentMateria);
-        }
-      };
-      reader.readAsArrayBuffer(file);
+        newSubjects = extractedTopics.filter((value, index, self) => self.indexOf(value) === index); // Remove duplicatas
+      }
+
+      if (newSubjects.length > 0) {
+        importSubjects(newSubjects, currentMateria);
+        showFeedback('success', `${newSubjects.length} assuntos importados de ${file.name} com sucesso!`);
+      } else {
+        showFeedback('error', `Nenhum assunto válido encontrado em ${file.name}.`);
+      }
+    } catch (error) {
+      console.error('Erro ao ler arquivo:', error);
+      showFeedback('error', `Erro ao processar o arquivo ${file.name}. Verifique o formato.`);
     }
 
-    // Limpa o valor do input de arquivo para permitir re-importar o mesmo arquivo
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
-    setMateriaInput(''); // Limpa o campo da matéria após a importação de arquivo
+    setMateriaInput('');
   };
 
   return (
@@ -131,6 +138,13 @@ const ImportSubjects: React.FC = () => {
             Importar de Arquivo (.csv, .xlsx, .pdf)
           </button>
         </div>
+
+        {feedbackMessage && (
+          <div className={`mt-4 p-4 rounded-xl flex items-center ${feedbackMessage.type === 'success' ? 'bg-success/20 text-success' : 'bg-error/20 text-error'}`}>
+            {feedbackMessage.type === 'success' ? <CheckCircle className="w-5 h-5 mr-3" /> : <AlertCircle className="w-5 h-5 mr-3" />}
+            <p className="font-medium">{feedbackMessage.text}</p>
+          </div>
+        )}
       </Card>
 
       <Card title="Assuntos Atuais" className="mt-8">

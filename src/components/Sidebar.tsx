@@ -1,18 +1,18 @@
 import React from 'react';
 import { NavLink, Link } from 'react-router-dom';
-import { Book, Settings, Calendar, CheckSquare, BarChart2, Brain, Home, Repeat, X } from 'lucide-react'; // Adicionado Home, Repeat, X
+import { Book, Settings, Calendar, CheckSquare, BarChart2, Brain, Home, Repeat, X } from 'lucide-react';
 
 interface SidebarLinkProps {
   to: string;
   icon: React.ElementType;
   label: string;
-  onClick: () => void; // Adicionado prop onClick
+  onClick: () => void;
 }
 
 const SidebarLink: React.FC<SidebarLinkProps> = ({ to, icon: Icon, label, onClick }) => (
   <NavLink
     to={to}
-    onClick={onClick} // Passa o onClick para o NavLink
+    onClick={onClick}
     className={({ isActive }) =>
       `flex items-center p-4 rounded-xl text-textSecondary hover:bg-background hover:text-primary transition-all duration-200 group
       ${isActive ? 'bg-background text-primary shadow-glow-primary' : ''}`
@@ -26,13 +26,13 @@ const SidebarLink: React.FC<SidebarLinkProps> = ({ to, icon: Icon, label, onClic
 interface SidebarProps {
   isOpen: boolean;
   onClose: () => void;
-  openReviewModal: () => void; // Função para abrir o modal de revisão
+  openReviewModal: () => void;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, openReviewModal }) => {
   const handleOpenReviewModal = () => {
     openReviewModal();
-    onClose(); // Fecha a sidebar após abrir o modal
+    onClose();
   };
 
   return (
@@ -43,7 +43,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, openReviewModal }) =
         transition-transform duration-300 ease-in-out`}
     >
       <div className="flex items-center justify-between mb-10">
-        <Link to="/" className="flex items-center" onClick={onClose}> {/* Link para a home no logo */}
+        <Link to="/" className="flex items-center" onClick={onClose}>
           <Brain className="w-10 h-10 text-primary mr-3" />
           <h1 className="text-3xl font-bold text-text">StudyFlow</h1>
         </Link>
@@ -57,7 +57,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, openReviewModal }) =
         <SidebarLink to="/configuracao" icon={Settings} label="Configuração" onClick={onClose} />
         <SidebarLink to="/cronograma" icon={Calendar} label="Cronograma" onClick={onClose} />
         <SidebarLink to="/progresso" icon={CheckSquare} label="Progresso & Revisão" onClick={onClose} />
-        <SidebarLink to="/dashboard" icon={BarChart2} label="Dashboard Analítico" onClick={onClose} />
+        {/* Link "Dashboard Analítico" removido */}
         <button
           onClick={handleOpenReviewModal}
           className="flex items-center p-4 rounded-xl text-textSecondary hover:bg-background hover:text-accent transition-all duration-200 group w-full text-left"
