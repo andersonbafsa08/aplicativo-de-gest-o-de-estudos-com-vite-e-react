@@ -1,0 +1,1 @@
+# aplicativo-de-gest-o-de-estudos-com-vite-e-react
