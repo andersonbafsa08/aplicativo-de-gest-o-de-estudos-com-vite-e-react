@@ -1,19 +1,17 @@
 import React from 'react';
 import { useStudy } from '../context/StudyContext';
 import Card from '../components/Card';
-import { Download, CalendarDays, BookOpen, CheckCircle, Clock } from 'lucide-react';
+import { Download, CalendarDays, BookOpen, CheckCircle, Clock, FileText } from 'lucide-react';
 import jsPDF from 'jspdf';
 
 const Schedule: React.FC = () => {
   const { schedule, subjects } = useStudy();
 
-  const getSubjectName = (id: string) => {
-    return subjects.find(s => s.id === id)?.name || 'Assunto Desconhecido';
+  const getSubjectDetails = (id: string) => {
+    return subjects.find(s => s.id === id);
   };
 
-  const getSubjectStatus = (id: string) => {
-    const subject = subjects.find(s => s.id === id);
-    if (!subject) return { text: '', color: '' };
+  const getSubjectStatus = (subject: Subject) => {
     if (subject.completed) return { text: 'Concluído', color: 'text-success', icon: <CheckCircle className="w-4 h-4 mr-1" /> };
     if (subject.nextReview) {
       const today = new Date().toISOString().split('T')[0];
@@ -48,11 +46,13 @@ const Schedule: React.FC = () => {
           y += 10;
         } else {
           entry.subjects.forEach((subjectId) => {
-            const subjectName = getSubjectName(subjectId);
-            const status = getSubjectStatus(subjectId);
-            doc.setFontSize(12);
-            doc.text(`  - ${subjectName} ${status.text ? `(${status.text})` : ''}`, 15, y);
-            y += 7;
+            const subject = getSubjectDetails(subjectId);
+            if (subject) {
+              const status = getSubjectStatus(subject);
+              doc.setFontSize(12);
+              doc.text(`  - ${subject.name} ${subject.materia ? `(${subject.materia})` : ''} ${status.text ? `(${status.text})` : ''}`, 15, y);
+              y += 7;
+            }
           });
         }
         y += 5; // Space between days
@@ -89,11 +89,18 @@ const Schedule: React.FC = () => {
                   ) : (
                     <ul className="list-none space-y-2 pl-0">
                       {entry.subjects.map((subjectId) => {
-                        const status = getSubjectStatus(subjectId);
+                        const subject = getSubjectDetails(subjectId);
+                        if (!subject) return null;
+                        const status = getSubjectStatus(subject);
                         return (
                           <li key={subjectId} className="text-textSecondary flex items-center">
                             <BookOpen className="w-4 h-4 mr-2 text-primary" />
-                            {getSubjectName(subjectId)}
+                            {subject.name}
+                            {subject.materia && (
+                              <span className="ml-2 text-textSecondary text-xs bg-background px-1 py-0.5 rounded-md border border-border">
+                                <FileText className="inline-block w-3 h-3 mr-1" /> {subject.materia}
+                              </span>
+                            )}
                             {status.text && (
                               <span className={`ml-2 text-sm flex items-center ${status.color}`}>
                                 {status.icon} {status.text}

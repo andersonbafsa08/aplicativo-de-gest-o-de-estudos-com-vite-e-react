@@ -6,6 +6,7 @@ import useLocalStorage from '../hooks/useLocalStorage';
 export interface Subject {
   id: string;
   name: string;
+  materia: string; // Novo campo para organizar por matéria
   completed: boolean; // Overall completion
   lastStudied: string | null; // YYYY-MM-DD
   nextReview: string | null; // YYYY-MM-DD
@@ -19,6 +20,7 @@ export interface Subject {
   questionsMade: number;
   correctAnswers: number;
   accuracy: number; // Derived: correctAnswers / questionsMade * 100
+  questionHistory: { date: string; made: number; correct: number; }[]; // Histórico de questões por dia
 }
 
 export interface StudyConfig {
@@ -37,7 +39,7 @@ interface StudyContextType {
   subjects: Subject[];
   config: StudyConfig;
   schedule: ScheduleEntry[];
-  importSubjects: (subjectNames: string[]) => void;
+  importSubjects: (subjectNames: string[], materia: string) => void; // Adicionado materia
   removeSubject: (id: string) => void;
   updateConfig: (newConfig: StudyConfig) => void;
   generateSchedule: () => void;
@@ -61,10 +63,11 @@ export const StudyProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const [config, setConfig] = useLocalStorage<StudyConfig>('study_config', initialConfig);
   const [schedule, setSchedule] = useLocalStorage<ScheduleEntry[]>('study_schedule', []);
 
-  const importSubjects = useCallback((subjectNames: string[]) => {
+  const importSubjects = useCallback((subjectNames: string[], materia: string) => {
     const newSubjects: Subject[] = subjectNames.map(name => ({
       id: uuidv4(),
       name,
+      materia: materia || 'Geral', // Define 'Geral' se nenhuma matéria for fornecida
       completed: false,
       lastStudied: null,
       nextReview: null,
@@ -76,6 +79,7 @@ export const StudyProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       questionsMade: 0,
       correctAnswers: 0,
       accuracy: 0,
+      questionHistory: [], // Inicializa o histórico de questões
     }));
     setSubjects(prev => [...prev, ...newSubjects]);
   }, [setSubjects]);
@@ -93,11 +97,29 @@ export const StudyProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       prev.map(s => {
         if (s.id === id) {
           const updatedSubject = { ...s, ...progress };
+          const today = new Date().toISOString().split('T')[0];
+
           // Recalculate accuracy if questionsMade or correctAnswers changed
           if (progress.questionsMade !== undefined || progress.correctAnswers !== undefined) {
             const qMade = updatedSubject.questionsMade;
             const cAnswers = updatedSubject.correctAnswers;
             updatedSubject.accuracy = qMade > 0 ? Math.round((cAnswers / qMade) * 100) : 0;
+
+            // Update question history for today
+            const existingEntryIndex = updatedSubject.questionHistory.findIndex(entry => entry.date === today);
+            if (existingEntryIndex !== -1) {
+              updatedSubject.questionHistory[existingEntryIndex] = {
+                date: today,
+                made: qMade,
+                correct: cAnswers,
+              };
+            } else {
+              updatedSubject.questionHistory.push({
+                date: today,
+                made: qMade,
+                correct: cAnswers,
+              });
+            }
           }
           // Check for overall completion
           updatedSubject.completed = updatedSubject.videoCompleted && updatedSubject.pdfCompleted && updatedSubject.exercisesCompleted;
