@@ -1,182 +1,237 @@
 import React, { useState, useRef } from 'react';
+import { Upload, Zap, Calendar, Clock, CheckCircle, FileText } from 'lucide-react';
 import { useStudy } from '../context/StudyContext';
-import Card from '../components/Card';
-import { PlusCircle, XCircle, CheckCircle, UploadCloud, FileText, AlertCircle } from 'lucide-react'; // Adicionado AlertCircle
-import * as XLSX from 'xlsx';
-import * as pdfjs from 'pdfjs-dist';
-
-// Configura o worker do pdfjs-dist
-pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
 
 const ImportSubjects: React.FC = () => {
-  const { importSubjects, removeSubject, subjects } = useStudy();
-  const [subjectInput, setSubjectInput] = useState('');
-  const [materiaInput, setMateriaInput] = useState('');
-  const [feedbackMessage, setFeedbackMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null); // Estado para feedback visual
+  const { addSubject } = useStudy();
+  const [step, setStep] = useState(1);
+  const [subjectName, setSubjectName] = useState('');
+  const [editalName, setEditalName] = useState('');
+  
+  // Novos estados para o planejamento detalhado (DB Schema)
+  const [dailyTime, setDailyTime] = useState(2); // hoursPerDay
+  const [daysPerWeek, setDaysPerWeek] = useState(5); // weeklyFrequency
+  const [maxHoursPerSession, setMaxHoursPerSession] = useState(1.5); // maxHoursPerSession
+  const [deadline, setDeadline] = useState(new Date().toISOString().split('T')[0]);
+  
+  const [loading, setLoading] = useState(false);
+  
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const showFeedback = (type: 'success' | 'error', text: string) => {
-    setFeedbackMessage({ type, text });
-    setTimeout(() => setFeedbackMessage(null), 5000); // Esconde a mensagem após 5 segundos
-  };
+  const handleGenerateSchedule = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!subjectName || !deadline || !editalName) return;
 
-  const handleImport = () => {
-    if (subjectInput.trim()) {
-      const newSubjects = subjectInput.split('\n').map(s => s.trim()).filter(s => s.length > 0);
-      if (newSubjects.length > 0) {
-        importSubjects(newSubjects, materiaInput.trim() || 'Geral');
-        setSubjectInput('');
-        setMateriaInput('');
-        showFeedback('success', `${newSubjects.length} assuntos importados com sucesso!`);
-      } else {
-        showFeedback('error', 'Nenhum assunto válido para importar do texto.');
-      }
-    } else {
-      showFeedback('error', 'Por favor, insira assuntos no campo de texto.');
-    }
-  };
-
-  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    let newSubjects: string[] = [];
-    const currentMateria = materiaInput.trim() || 'Geral';
-
+    setLoading(true);
+    
     try {
-      if (file.name.endsWith('.csv')) {
-        const text = await file.text();
-        newSubjects = text.split('\n').map(s => s.trim()).filter(s => s.length > 0);
-      } else if (file.name.endsWith('.xlsx')) {
-        const data = await file.arrayBuffer();
-        const workbook = XLSX.read(data, { type: 'array' });
-        const sheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[sheetName];
-        const json = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as string[][];
-        newSubjects = json.slice(1).map(row => row[0]?.toString().trim()).filter(s => s && s.length > 0) as string[];
-      } else if (file.name.endsWith('.pdf')) {
-        const data = await file.arrayBuffer();
-        const pdf = await pdfjs.getDocument({ data }).promise;
-        let extractedTopics: string[] = [];
-        for (let i = 1; i <= pdf.numPages; i++) {
-          const page = await pdf.getPage(i);
-          const textContent = await page.getTextContent();
-          const pageItems = textContent.items.map((item: any) => item.str.trim()).filter(str => str.length > 0);
-
-          // Heurística simples para identificar tópicos: linhas com menos de 100 caracteres
-          // Para identificação avançada de tópicos, seria necessária uma integração com IA/NLP.
-          const topicsOnPage = pageItems.filter(str => str.length > 0 && str.length < 100 && !/^\d+$/.test(str)); // Ignora números puros
-          extractedTopics.push(...topicsOnPage);
-        }
-        newSubjects = extractedTopics.filter((value, index, self) => self.indexOf(value) === index); // Remove duplicatas
-      }
-
-      if (newSubjects.length > 0) {
-        importSubjects(newSubjects, currentMateria);
-        showFeedback('success', `${newSubjects.length} assuntos importados de ${file.name} com sucesso!`);
-      } else {
-        showFeedback('error', `Nenhum assunto válido encontrado em ${file.name}.`);
-      }
+        // Chamada atualizada com todos os parâmetros do DB
+        await addSubject(
+            subjectName, 
+            editalName, 
+            deadline, 
+            dailyTime, 
+            daysPerWeek, 
+            maxHoursPerSession
+        );
+        setStep(3); // Confirmação
     } catch (error) {
-      console.error('Erro ao ler arquivo:', error);
-      showFeedback('error', `Erro ao processar o arquivo ${file.name}. Verifique o formato.`);
+        console.error("Erro ao adicionar assunto:", error);
+        alert("Erro ao salvar o cronograma. Verifique o console.");
+    } finally {
+        setLoading(false);
     }
-
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-    setMateriaInput('');
   };
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      setLoading(true);
+      
+      // Simulação da Análise de IA (IMEDIATA)
+      const extractedSubjectName = file.name.replace(/\.(pdf|docx|xlsx)$/i, '').trim() || 'Novo Assunto Analisado';
+      
+      setSubjectName(extractedSubjectName);
+      setLoading(false);
+      setStep(2);
+    }
+  };
+
+  const handleImportClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const today = new Date().toISOString().split('T')[0];
 
   return (
-    <div className="animate-fade-in">
-      <h1 className="text-4xl font-bold text-text mb-8">Importar Assuntos</h1>
-      <Card title="Adicionar Novos Assuntos">
-        <p className="text-textSecondary mb-4">
-          Insira os nomes dos assuntos ou tópicos, um por linha, ou importe de um arquivo CSV/XLSX/PDF.
-        </p>
-        <div className="mb-4">
-          <label htmlFor="materiaInput" className="block text-textSecondary text-sm font-medium mb-2">
-            Matéria (Opcional, ex: Matemática, História)
-          </label>
-          <input
-            type="text"
-            id="materiaInput"
-            className="w-full p-4 bg-background border border-border rounded-xl text-text focus:outline-none focus:ring-2 focus:ring-primary transition-all duration-200"
-            placeholder="Ex: Cálculo I"
-            value={materiaInput}
-            onChange={(e) => setMateriaInput(e.target.value)}
-          />
-        </div>
-        <textarea
-          className="w-full p-4 bg-background border border-border rounded-xl text-text focus:outline-none focus:ring-2 focus:ring-primary transition-all duration-200 resize-y min-h-[150px]"
-          placeholder="Ex: Matemática&#10;Português&#10;História do Brasil"
-          value={subjectInput}
-          onChange={(e) => setSubjectInput(e.target.value)}
-        ></textarea>
-        <button
-          onClick={handleImport}
-          className="mt-6 w-full bg-primary text-white py-3 px-6 rounded-xl text-lg font-semibold hover:bg-primary-dark transition-all duration-300 flex items-center justify-center shadow-lg hover:shadow-glow-primary"
-        >
-          <PlusCircle className="w-5 h-5 mr-2" />
-          Importar Assuntos (Manual)
-        </button>
+    <div className="space-y-8">
+      <h1 className="text-4xl font-extrabold text-text border-b border-border-color pb-4 flex items-center">
+        <Upload className="mr-3 text-secondary" size={32} />
+        Importar Matérias e Agendamento Inteligente
+      </h1>
 
-        <div className="mt-4 border-t border-border pt-4">
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={handleFileChange}
-            accept=".csv,.xlsx,.pdf"
-            className="hidden"
-          />
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="w-full bg-secondary text-white py-3 px-6 rounded-xl text-lg font-semibold hover:bg-secondary-dark transition-all duration-300 flex items-center justify-center shadow-lg hover:shadow-glow-secondary"
-          >
-            <UploadCloud className="w-5 h-5 mr-2" />
-            Importar de Arquivo (.csv, .xlsx, .pdf)
-          </button>
-        </div>
+      <div className="bg-surface p-8 rounded-xl shadow-lg border border-border-color max-w-3xl mx-auto">
+        
+        {step === 1 && (
+          <div className="text-center space-y-6">
+            <Zap className="mx-auto text-primary" size={48} />
+            <h2 className="text-2xl font-semibold text-text">Passo 1: Importar Conteúdo</h2>
+            <p className="text-text-secondary">Faça o upload de seus materiais (PDF, DOCX, XLSX) para que a IA possa analisar o conteúdo e sugerir um cronograma.</p>
+            
+            <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileChange}
+                className="hidden"
+                accept=".pdf,.docx,.xlsx"
+            />
 
-        {feedbackMessage && (
-          <div className={`mt-4 p-4 rounded-xl flex items-center ${feedbackMessage.type === 'success' ? 'bg-success/20 text-success' : 'bg-error/20 text-error'}`}>
-            {feedbackMessage.type === 'success' ? <CheckCircle className="w-5 h-5 mr-3" /> : <AlertCircle className="w-5 h-5 mr-3" />}
-            <p className="font-medium">{feedbackMessage.text}</p>
+            <div 
+                className="border-2 border-dashed border-border-color p-10 rounded-lg hover:border-primary transition-colors cursor-pointer" 
+                onClick={handleImportClick}
+            >
+                <FileText className="mx-auto text-text-secondary mb-3" size={32} />
+                <p className="text-text-secondary">Clique para selecionar ou arraste e solte arquivos.</p>
+                <p className="text-sm text-primary mt-2">Arquivos suportados: PDF, DOCX, XLSX.</p>
+            </div>
           </div>
         )}
-      </Card>
 
-      <Card title="Assuntos Atuais" className="mt-8">
-        {subjects.length === 0 ? (
-          <p className="text-textSecondary italic">Nenhum assunto importado ainda.</p>
-        ) : (
-          <ul className="space-y-3">
-            {subjects.map((subject) => (
-              <li key={subject.id} className="flex items-center bg-surface p-3 rounded-xl border border-border shadow-sm animate-slide-in-left">
-                <span className="text-text text-lg flex-grow">{subject.name}</span>
-                {subject.materia && (
-                  <span className="ml-2 text-textSecondary text-sm bg-background px-2 py-1 rounded-md border border-border">
-                    <FileText className="inline-block w-3 h-3 mr-1" /> {subject.materia}
-                  </span>
-                )}
-                {subject.completed && (
-                  <span className="ml-4 text-success text-sm flex items-center">
-                    <CheckCircle className="w-4 h-4 mr-1" /> Concluído
-                  </span>
-                )}
-                <button
-                  onClick={() => removeSubject(subject.id)}
-                  className="ml-4 text-error hover:text-red-600 transition-colors duration-200 p-1 rounded-full hover:bg-red-900/20"
-                  aria-label={`Remover assunto ${subject.name}`}
-                >
-                  <XCircle className="w-5 h-5" />
-                </button>
-              </li>
-            ))}
-          </ul>
+        {step === 2 && (
+          <form onSubmit={handleGenerateSchedule} className="space-y-6">
+            <Zap className="text-primary" size={32} />
+            <h2 className="text-2xl font-semibold text-text">Passo 2: Gerar Cronograma Inteligente</h2>
+            <p className="text-text-secondary">A IA analisou o arquivo. Agora, defina o Edital e suas restrições para otimizar o plano de estudos.</p>
+
+            {/* Nome do Edital/Concurso */}
+            <div>
+              <label htmlFor="editalName" className="block text-sm font-medium text-text-secondary mb-1">Nome do Edital/Concurso</label>
+              <input
+                type="text"
+                id="editalName"
+                value={editalName}
+                onChange={(e) => setEditalName(e.target.value)}
+                placeholder="Ex: Concurso INSS 2026"
+                className="w-full p-3 rounded-lg bg-background border border-border-color text-text focus:border-secondary focus:ring-secondary transition-colors"
+                required
+              />
+            </div>
+
+            {/* Nome da Matéria */}
+            <div>
+              <label htmlFor="subjectName" className="block text-sm font-medium text-text-secondary mb-1">Nome da Matéria (Sugerido pela IA)</label>
+              <input
+                type="text"
+                id="subjectName"
+                value={subjectName}
+                onChange={(e) => setSubjectName(e.target.value)}
+                className="w-full p-3 rounded-lg bg-background border border-border-color text-text focus:border-primary focus:ring-primary transition-colors"
+                required
+              />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Tempo Diário (hoursPerDay) */}
+              <div>
+                <label htmlFor="dailyTime" className="block text-sm font-medium text-text-secondary mb-1">Tempo Diário (horas)</label>
+                <input
+                  type="number"
+                  id="dailyTime"
+                  value={dailyTime}
+                  onChange={(e) => setDailyTime(parseFloat(e.target.value))}
+                  min="0.5"
+                  max="10"
+                  step="0.5"
+                  className="w-full p-3 rounded-lg bg-background border border-border-color text-text focus:border-primary focus:ring-primary transition-colors"
+                  required
+                />
+              </div>
+
+              {/* Dias por Semana (weeklyFrequency) */}
+              <div>
+                <label htmlFor="daysPerWeek" className="block text-sm font-medium text-text-secondary mb-1">Dias por Semana</label>
+                <input
+                  type="number"
+                  id="daysPerWeek"
+                  value={daysPerWeek}
+                  onChange={(e) => setDaysPerWeek(parseInt(e.target.value))}
+                  min="1"
+                  max="7"
+                  className="w-full p-3 rounded-lg bg-background border border-border-color text-text focus:border-primary focus:ring-primary transition-colors"
+                  required
+                />
+              </div>
+
+              {/* Máximo por Sessão (maxHoursPerSession) */}
+              <div>
+                <label htmlFor="maxHoursPerSession" className="block text-sm font-medium text-text-secondary mb-1">Máx. por Sessão (horas)</label>
+                <input
+                  type="number"
+                  id="maxHoursPerSession"
+                  value={maxHoursPerSession}
+                  onChange={(e) => setMaxHoursPerSession(parseFloat(e.target.value))}
+                  min="0.5"
+                  max={dailyTime}
+                  step="0.5"
+                  className="w-full p-3 rounded-lg bg-background border border-border-color text-text focus:border-primary focus:ring-primary transition-colors"
+                  required
+                />
+              </div>
+            </div>
+            
+            {/* Data Limite */}
+            <div>
+              <label htmlFor="deadline" className="block text-sm font-medium text-text-secondary mb-1">Data Limite da Prova</label>
+              <input
+                type="date"
+                id="deadline"
+                value={deadline}
+                onChange={(e) => setDeadline(e.target.value)}
+                min={today}
+                className="w-full p-3 rounded-lg bg-background border border-border-color text-text focus:border-primary focus:ring-primary transition-colors"
+                required
+              />
+            </div>
+
+
+            <button 
+              type="submit" 
+              className={`w-full p-3 rounded-lg font-semibold transition-colors flex items-center justify-center ${loading ? 'bg-primary/50 cursor-not-allowed' : 'bg-primary hover:bg-primary/90 shadow-lg shadow-primary/30'}`}
+              disabled={loading}
+            >
+              {loading ? (
+                <>
+                  <Clock className="animate-spin mr-2" size={20} />
+                  Gerando Cronograma...
+                </>
+              ) : (
+                <>
+                  <Calendar className="mr-2" size={20} />
+                  Gerar Cronograma Automaticamente
+                </>
+              )}
+            </button>
+          </form>
         )}
-      </Card>
+
+        {step === 3 && (
+          <div className="text-center space-y-6">
+            <CheckCircle className="mx-auto text-success" size={48} />
+            <h2 className="text-2xl font-semibold text-text">Sucesso! Cronograma Gerado.</h2>
+            <p className="text-text-secondary">O cronograma para **{subjectName}** (Edital: **{editalName}**) foi criado e persistido no Supabase. Acesse a aba **Cronograma** para começar a estudar.</p>
+            <button 
+              onClick={() => {
+                setStep(1);
+                setSubjectName('');
+                setEditalName('');
+              }}
+              className="bg-secondary text-white p-3 rounded-lg font-semibold hover:bg-secondary/90 transition-colors"
+            >
+              Importar Outra Matéria
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

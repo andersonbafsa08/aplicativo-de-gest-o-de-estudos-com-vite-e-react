@@ -1,76 +1,84 @@
-import React from 'react';
-import { NavLink, Link } from 'react-router-dom';
-import { Book, Settings, Calendar, CheckSquare, BarChart2, Brain, Home, Repeat, X } from 'lucide-react';
+import React, { useState } from 'react';
+import { Link, useLocation } from 'react-router-dom';
+import { LayoutDashboard, BookOpen, Calendar, TrendingUp, Settings, Upload, ChevronLeft } from 'lucide-react';
 
-interface SidebarLinkProps {
+interface NavItemProps {
   to: string;
-  icon: React.ElementType;
+  icon: React.ReactNode;
   label: string;
-  onClick: () => void;
-}
-
-const SidebarLink: React.FC<SidebarLinkProps> = ({ to, icon: Icon, label, onClick }) => (
-  <NavLink
-    to={to}
-    onClick={onClick}
-    className={({ isActive }) =>
-      `flex items-center p-4 rounded-xl text-textSecondary hover:bg-background hover:text-primary transition-all duration-200 group
-      ${isActive ? 'bg-background text-primary shadow-glow-primary' : ''}`
-    }
-  >
-    <Icon className="w-6 h-6 mr-4 group-hover:scale-110 transition-transform duration-200" />
-    <span className="text-lg font-medium">{label}</span>
-  </NavLink>
-);
-
-interface SidebarProps {
+  isActive: boolean;
   isOpen: boolean;
-  onClose: () => void;
-  openReviewModal: () => void;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, openReviewModal }) => {
-  const handleOpenReviewModal = () => {
-    openReviewModal();
-    onClose();
-  };
+const NavItem: React.FC<NavItemProps> = ({ to, icon, label, isActive, isOpen }) => {
+  const baseClasses = "flex items-center rounded-xl transition-all duration-200 text-text-secondary hover:bg-surface/70";
+  const activeClasses = "bg-primary/20 text-primary font-semibold shadow-glow";
+  const paddingClasses = isOpen ? 'p-3' : 'p-3 justify-center';
+  const textVisibility = isOpen ? 'opacity-100 transition-opacity duration-200' : 'opacity-0 hidden';
 
   return (
-    <aside
-      className={`fixed inset-y-0 left-0 w-72 bg-surface p-6 flex flex-col shadow-lg z-50
-        transform ${isOpen ? 'translate-x-0' : '-translate-x-full'}
-        lg:translate-x-0 lg:static lg:shadow-none lg:border-r lg:border-border
-        transition-transform duration-300 ease-in-out`}
-    >
-      <div className="flex items-center justify-between mb-10">
-        <Link to="/" className="flex items-center" onClick={onClose}>
-          <Brain className="w-10 h-10 text-primary mr-3" />
-          <h1 className="text-3xl font-bold text-text">StudyFlow</h1>
-        </Link>
-        <button onClick={onClose} className="text-textSecondary hover:text-error lg:hidden p-2 rounded-md hover:bg-background transition-colors duration-200" aria-label="Fechar menu lateral">
-          <X className="w-6 h-6" />
-        </button>
-      </div>
-      <nav className="flex-grow space-y-4">
-        <SidebarLink to="/" icon={Home} label="Início" onClick={onClose} />
-        <SidebarLink to="/importar-assuntos" icon={Book} label="Importar Assuntos" onClick={onClose} />
-        <SidebarLink to="/configuracao" icon={Settings} label="Configuração" onClick={onClose} />
-        <SidebarLink to="/cronograma" icon={Calendar} label="Cronograma" onClick={onClose} />
-        <SidebarLink to="/progresso" icon={CheckSquare} label="Progresso & Revisão" onClick={onClose} />
-        {/* Link "Dashboard Analítico" removido */}
-        <button
-          onClick={handleOpenReviewModal}
-          className="flex items-center p-4 rounded-xl text-textSecondary hover:bg-background hover:text-accent transition-all duration-200 group w-full text-left"
-          aria-label="Abrir revisões pendentes"
+    <Link to={to} className={`${baseClasses} ${isActive ? activeClasses : ''} ${paddingClasses}`}>
+      <span className={`${isOpen ? 'mr-4' : ''}`}>{icon}</span>
+      <span className={textVisibility}>{label}</span>
+    </Link>
+  );
+};
+
+const Sidebar: React.FC = () => {
+  const location = useLocation();
+  const [isOpen, setIsOpen] = useState(true); // Estado para controlar a abertura/fechamento
+
+  const navItems = [
+    { to: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} /> },
+    { to: '/', label: 'Importar Matérias', icon: <Upload size={20} /> }, // Rota raiz
+    { to: '/cronograma', label: 'Cronograma', icon: <Calendar size={20} /> },
+    { to: '/progresso', label: 'Revisão de Progresso', icon: <TrendingUp size={20} /> },
+    { to: '/configuracao', label: 'Configurações', icon: <Settings size={20} /> },
+  ];
+
+  // Classes dinâmicas
+  const sidebarWidth = isOpen ? 'w-64' : 'w-20';
+
+  return (
+    <div className={`${sidebarWidth} bg-surface flex flex-col border-r border-border-color transition-all duration-300 ease-in-out sticky top-0 h-screen flex-shrink-0`}>
+      
+      {/* Header e Toggle */}
+      <div className={`flex ${isOpen ? 'justify-between' : 'justify-center'} items-center mb-10 ${isOpen ? 'p-6 pb-0' : 'p-4'}`}>
+        {isOpen && (
+          <div className="text-2xl font-bold text-primary flex items-center">
+            <BookOpen className="mr-2" size={28} />
+            StudyFlow
+          </div>
+        )}
+        <button 
+          onClick={() => setIsOpen(!isOpen)}
+          className={`p-2 rounded-full text-text-secondary hover:bg-primary/20 transition-colors ${isOpen ? 'ml-auto' : ''}`}
+          aria-label={isOpen ? 'Ocultar Sidebar' : 'Mostrar Sidebar'}
         >
-          <Repeat className="w-6 h-6 mr-4 group-hover:scale-110 transition-transform duration-200" />
-          <span className="text-lg font-medium">Revisões Pendentes</span>
+          <ChevronLeft size={24} className={isOpen ? '' : 'rotate-180'} />
         </button>
-      </nav>
-      <div className="mt-auto pt-6 border-t border-border text-textSecondary text-sm text-center">
-        <p>&copy; 2025 StudyFlow. Todos os direitos reservados.</p>
       </div>
-    </aside>
+
+      <nav className={`space-y-2 ${isOpen ? 'px-6' : 'px-4'}`}>
+        {navItems.map((item) => (
+          <NavItem
+            key={item.to}
+            to={item.to}
+            label={item.label}
+            icon={item.icon}
+            isActive={location.pathname === item.to}
+            isOpen={isOpen}
+          />
+        ))}
+      </nav>
+      
+      {/* Footer */}
+      <div className={`mt-auto pt-6 border-t border-border-color/50 ${isOpen ? 'px-6' : 'px-4'} pb-6`}>
+        <p className={`text-xs text-text-secondary ${isOpen ? 'opacity-100' : 'opacity-0 hidden'} transition-opacity duration-200`}>
+          © 2025 Bolt AI.
+        </p>
+      </div>
+    </div>
   );
 };
 

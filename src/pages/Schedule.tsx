@@ -1,154 +1,290 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { Calendar, Clock, Zap, CheckCircle, BookOpen, FileText, BarChart2, X, Filter } from 'lucide-react';
 import { useStudy } from '../context/StudyContext';
-import Card from '../components/Card';
-import { Download, CalendarDays, BookOpen, CheckCircle, Clock, FileText, Trash2 } from 'lucide-react'; // Adicionado Trash2
-import jsPDF from 'jspdf';
+import { Task, ExerciseTracking } from '../types';
 
-const Schedule: React.FC = () => {
-  const { schedule, subjects, clearSchedule, clearScheduleDay } = useStudy(); // Adicionado clearSchedule e clearScheduleDay
+// Componente Modal para rastreamento de exercícios (mantido)
+interface ExerciseModalProps {
+  task: Task;
+  subjectId: string;
+  subjectName: string;
+  onClose: () => void;
+}
 
-  const getSubjectDetails = (id: string) => {
-    return subjects.find(s => s.id === id);
-  };
+const ExerciseTrackingModal: React.FC<ExerciseModalProps> = ({ task, subjectId, subjectName, onClose }) => {
+  const { updateTaskStatus } = useStudy();
+  const [made, setMade] = useState(task.tracking?.questions_made || 0);
+  const [hit, setHit] = useState(task.tracking?.questions_hit || 0);
 
-  const getSubjectStatus = (subject: Subject) => {
-    if (subject.completed) return { text: 'Concluído', color: 'text-success', icon: <CheckCircle className="w-4 h-4 mr-1" /> };
-    if (subject.nextReview) {
-      const today = new Date().toISOString().split('T')[0];
-      if (subject.nextReview <= today) {
-        return { text: 'Revisão Pendente', color: 'text-warning', icon: <Clock className="w-4 h-4 mr-1" /> };
-      }
-    }
-    return { text: '', color: '' };
-  };
+  const score = made > 0 ? Math.round((hit / made) * 100) : 0;
 
-  const handleClearSchedule = () => {
-    if (window.confirm('Tem certeza que deseja limpar todo o cronograma? Esta ação é irreversível.')) {
-      clearSchedule();
-      alert('Cronograma limpo com sucesso!');
-    }
-  };
-
-  const handleClearDay = (date: string) => {
-    if (window.confirm(`Tem certeza que deseja limpar o cronograma para o dia ${new Date(date).toLocaleDateString('pt-BR')}?`)) {
-      clearScheduleDay(date);
-      alert(`Cronograma para ${new Date(date).toLocaleDateString('pt-BR')} limpo com sucesso!`);
-    }
-  };
-
-  const exportScheduleToPDF = () => {
-    const doc = new jsPDF();
-    doc.setFontSize(22);
-    doc.text('Cronograma de Estudos', 10, 20);
-    doc.setFontSize(12);
-
-    let y = 30;
-    if (schedule.length === 0) {
-      doc.text('Nenhum cronograma gerado ainda.', 10, y);
-    } else {
-      schedule.forEach((entry) => {
-        if (y > 280) { // Check if page break is needed
-          doc.addPage();
-          y = 20;
-        }
-        doc.setFontSize(14);
-        doc.text(`Data: ${new Date(entry.date).toLocaleDateString('pt-BR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}`, 10, y);
-        y += 10;
-        if (entry.subjects.length === 0) {
-          doc.setFontSize(12);
-          doc.text('  Nenhum assunto agendado para este dia.', 15, y);
-          y += 10;
-        } else {
-          entry.subjects.forEach((subjectId) => {
-            const subject = getSubjectDetails(subjectId);
-            if (subject) {
-              const status = getSubjectStatus(subject);
-              doc.setFontSize(12);
-              doc.text(`  - ${subject.name} ${subject.materia ? `(${subject.materia})` : ''} ${status.text ? `(${status.text})` : ''}`, 15, y);
-              y += 7;
-            }
-          });
-        }
-        y += 5; // Space between days
-      });
-    }
-
-    doc.save('cronograma_de_estudos.pdf');
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const tracking: ExerciseTracking = {
+      questions_made: made,
+      questions_hit: hit,
+      score_percentage: score,
+    };
+    updateTaskStatus(subjectId, task.id, 'completed', tracking);
+    onClose();
   };
 
   return (
-    <div className="animate-fade-in">
-      <h1 className="text-4xl font-bold text-text mb-8">Cronograma de Estudos</h1>
-      <Card title="Seu Cronograma Gerado">
-        {schedule.length === 0 ? (
-          <p className="text-textSecondary italic">Nenhum cronograma gerado ainda. Vá para a tela de Configuração para gerar um.</p>
+    <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
+      <div className="bg-surface p-6 rounded-xl shadow-2xl w-full max-w-lg border border-border-color relative">
+        <button onClick={onClose} className="absolute top-4 right-4 text-text-secondary hover:text-error transition-colors">
+          <X size={24} />
+        </button>
+        <h3 className="text-2xl font-bold text-text mb-4 flex items-center">
+          <BarChart2 className="mr-2 text-accent" />
+          Rastrear Exercícios: {subjectName}
+        </h3>
+        <p className="text-text-secondary mb-6">Registre seu desempenho na tarefa: **{task.type}**</p>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label htmlFor="made" className="block text-sm font-medium text-text-secondary mb-1">Questões Feitas</label>
+            <input
+              type="number"
+              id="made"
+              value={made}
+              onChange={(e) => setMade(parseInt(e.target.value) || 0)}
+              min="0"
+              className="w-full p-3 rounded-lg bg-background border border-border-color text-text focus:border-primary focus:ring-primary transition-colors"
+              required
+            />
+          </div>
+          <div>
+            <label htmlFor="hit" className="block text-sm font-medium text-text-secondary mb-1">Questões Acertadas</label>
+            <input
+              type="number"
+              id="hit"
+              value={hit}
+              onChange={(e) => setHit(parseInt(e.target.value) || 0)}
+              min="0"
+              max={made}
+              className="w-full p-3 rounded-lg bg-background border border-border-color text-text focus:border-primary focus:ring-primary transition-colors"
+              required
+            />
+          </div>
+
+          <div className="text-center p-3 bg-background rounded-lg border border-border-color">
+            <p className="text-lg font-semibold text-text">Pontuação Calculada: <span className="text-primary">{score}%</span></p>
+          </div>
+
+          <button type="submit" className="w-full bg-primary text-white p-3 rounded-lg font-semibold hover:bg-primary/90 transition-colors">
+            Salvar e Concluir Tarefa
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+const Schedule: React.FC = () => {
+  const { subjects, updateTaskStatus } = useStudy();
+  const today = new Date().toISOString().split('T')[0];
+  
+  // 1. Estado para Edital selecionado
+  const [selectedEdital, setSelectedEdital] = useState<string | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [selectedTask, setSelectedTask] = useState<{ task: Task, subjectId: string, subjectName: string } | null>(null);
+
+  // 2. Obter lista única de Editais
+  const editalList = Array.from(new Set(subjects.map(s => s.edital))).filter(Boolean);
+
+  // --- Lógica de Filtragem e Ordenação (Requisito 1.2) ---
+  
+  // 3. Filtrar todos os assuntos pelo Edital selecionado
+  const allSubjectsFilteredByEdital = subjects.filter(s => 
+    !selectedEdital || s.edital === selectedEdital
+  );
+
+  // 4. Estruturar a lista para exibição e determinar status de conclusão
+  const scheduleItems = allSubjectsFilteredByEdital.map(subject => {
+    // Tarefas PENDENTES agendadas para HOJE
+    const dailyTasks = subject.tasks.filter(t => t.status === 'pending' && t.scheduled_date === today);
+    
+    const isSubjectCompleted = subject.progress_percentage === 100;
+
+    // Inclui o assunto se estiver 100% completo OU se tiver tarefas pendentes para hoje
+    if (isSubjectCompleted || dailyTasks.length > 0) {
+        return {
+            subject,
+            dailyTasks, // Tasks pending for today
+            isSubjectCompleted
+        };
+    }
+    return null;
+  }).filter(item => item !== null);
+
+  // 5. Reordenar: Ativos hoje primeiro, Concluídos por último
+  const activeToday = scheduleItems.filter(item => !item.isSubjectCompleted);
+  const completedSubjects = scheduleItems.filter(item => item.isSubjectCompleted);
+
+  const finalSchedule = [...activeToday, ...completedSubjects];
+  // -------------------------------------------------------
+
+
+  const handleTaskCompletion = (subjectId: string, taskId: string, type: string) => {
+    if (type === 'Exercícios') {
+      const subject = subjects.find(s => s.id === subjectId);
+      const task = subject?.tasks.find(t => t.id === taskId);
+      if (task && subject) {
+        setSelectedTask({ task, subjectId, subjectName: subject.name });
+        setModalOpen(true);
+      }
+    } else {
+      // Para Video Aula e PDF, apenas marca como concluído
+      updateTaskStatus(subjectId, taskId, 'completed');
+    }
+  };
+
+  const getIcon = (type: string) => {
+    switch (type) {
+      case 'Video Aula': return <BookOpen size={20} className="text-secondary" />;
+      case 'PDF': return <FileText size={20} className="text-accent" />;
+      case 'Exercícios': return <BarChart2 size={20} className="text-primary" />;
+      default: return <Clock size={20} className="text-text-secondary" />;
+    }
+  };
+
+  return (
+    <div className="space-y-8">
+      <h1 className="text-4xl font-extrabold text-text border-b border-border-color pb-4 flex items-center">
+        <Calendar className="mr-3 text-secondary" size={32} />
+        Cronograma Diário ({new Date().toLocaleDateString('pt-BR')})
+      </h1>
+
+      {/* Painel de Seleção de Edital */}
+      <div className="bg-surface p-4 rounded-xl shadow-lg border border-border-color">
+        <h2 className="text-xl font-semibold text-text mb-3 flex items-center">
+            <Filter size={20} className="mr-2 text-accent" />
+            Filtrar por Edital/Concurso
+        </h2>
+        <div className="flex flex-wrap gap-3">
+          <button
+            onClick={() => setSelectedEdital(null)}
+            className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+              selectedEdital === null ? 'bg-primary text-white shadow-md shadow-primary/30' : 'bg-background text-text-secondary hover:bg-border-color'
+            }`}
+          >
+            Todos os Editais
+          </button>
+          {editalList.map(edital => (
+            <button
+              key={edital}
+              onClick={() => setSelectedEdital(edital)}
+              className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+                selectedEdital === edital ? 'bg-secondary text-white shadow-md shadow-secondary/30' : 'bg-background text-text-secondary hover:bg-border-color'
+              }`}
+            >
+              {edital}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="bg-surface p-6 rounded-xl shadow-lg border border-border-color">
+        <h2 className="text-2xl font-semibold text-text mb-6">
+          Tarefas Agendadas {selectedEdital ? `para: ${selectedEdital}` : ''}
+        </h2>
+        
+        {finalSchedule.length === 0 ? (
+          <div className="text-center py-10 text-text-secondary">
+            <Zap className="mx-auto mb-3" size={40} />
+            <p>Nenhuma sessão de estudo agendada para hoje {selectedEdital ? `neste edital` : ''}.</p>
+          </div>
         ) : (
-          <>
-            <div className="flex flex-col sm:flex-row gap-4 mb-6">
-              <button
-                onClick={exportScheduleToPDF}
-                className="flex-1 bg-accent text-white py-3 px-6 rounded-xl text-lg font-semibold hover:bg-fuchsia-600 transition-all duration-300 flex items-center justify-center shadow-lg hover:shadow-glow-primary"
-              >
-                <Download className="w-5 h-5 mr-2" />
-                Exportar para PDF
-              </button>
-              <button
-                onClick={handleClearSchedule}
-                className="flex-1 bg-error text-white py-3 px-6 rounded-xl text-lg font-semibold hover:bg-red-700 transition-all duration-300 flex items-center justify-center shadow-lg"
-              >
-                <Trash2 className="w-5 h-5 mr-2" />
-                Limpar Todo Cronograma
-              </button>
-            </div>
-            <div className="space-y-6">
-              {schedule.map((entry) => (
-                <div key={entry.date} className="bg-surface p-5 rounded-xl border border-border shadow-md animate-slide-in-left">
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-xl font-semibold text-primary flex items-center">
-                      <CalendarDays className="w-5 h-5 mr-2" />
-                      {new Date(entry.date).toLocaleDateString('pt-BR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+          <div className="space-y-6">
+            {finalSchedule.map((item) => {
+                const { subject, dailyTasks, isSubjectCompleted } = item;
+                
+                // Estilo de conclusão (Requisito 1.2)
+                // Nota: Usamos cores dinâmicas do objeto subject para assuntos ativos.
+                const subjectCardClass = isSubjectCompleted 
+                    ? 'border-l-4 border-success bg-success/10 pl-4 space-y-3 transition-all duration-500'
+                    : `border-l-4 pl-4 space-y-3` // Tailwind JIT deve capturar a cor dinâmica
+                
+                // Adiciona a cor dinâmica diretamente ao estilo para garantir que o JIT a reconheça
+                const activeBorderStyle = isSubjectCompleted ? {} : { borderColor: subject.color };
+
+                return (
+                  <div key={subject.id} className={subjectCardClass} style={activeBorderStyle}>
+                    <h3 className="text-xl font-bold text-text mb-1 flex justify-between items-center">
+                        <span>{subject.name}</span>
+                        {isSubjectCompleted && (
+                            <span className="text-success text-sm font-medium flex items-center">
+                                <CheckCircle size={16} className="mr-1" /> Assunto Concluído
+                            </span>
+                        )}
                     </h3>
-                    <button
-                      onClick={() => handleClearDay(entry.date)}
-                      className="text-textSecondary hover:text-error transition-colors duration-200 p-2 rounded-md hover:bg-red-900/20"
-                      aria-label={`Limpar cronograma para ${new Date(entry.date).toLocaleDateString('pt-BR')}`}
-                    >
-                      <Trash2 className="w-5 h-5" />
-                    </button>
+                    <p className="text-sm text-accent font-medium mb-3">Progresso: {subject.progress_percentage}% | Edital: {subject.edital}</p>
+                    
+                    {/* Se o assunto estiver concluído, mostramos um resumo */}
+                    {isSubjectCompleted ? (
+                        <div className="bg-background p-4 rounded-lg text-text-secondary border border-success/30">
+                            <p>Todas as tarefas deste assunto foram concluídas. Adicionado ao ciclo de revisões.</p>
+                            <p className="text-xs mt-1 text-text">Score Médio de Exercícios: <span className="font-bold text-primary">{subject.overall_score}%</span></p>
+                        </div>
+                    ) : (
+                        // Renderiza apenas as tarefas agendadas para hoje
+                        dailyTasks.length > 0 ? (
+                            dailyTasks.map((task) => {
+                                return (
+                                    <div
+                                        key={task.id}
+                                        className="flex items-center bg-background p-4 rounded-lg hover:shadow-glow transition-shadow duration-300 border border-border-color"
+                                    >
+                                        {getIcon(task.type)}
+                                        <div className="flex-1 mx-4">
+                                            <p className="font-semibold text-text">{task.type}</p>
+                                            <p className="text-sm text-text-secondary">{task.planned_duration_minutes} minutos</p>
+                                            
+                                            {/* Requisito 1.1: Exibir score para exercícios concluídos */}
+                                            {task.type === 'Exercícios' && task.status === 'completed' && task.tracking && (
+                                                <p className="text-xs font-bold text-primary mt-1">
+                                                    Score: {task.tracking.score_percentage}% ({task.tracking.questions_hit}/{task.tracking.questions_made})
+                                                </p>
+                                            )}
+                                        </div>
+                                        
+                                        {task.status === 'completed' ? (
+                                            <span className="text-success flex items-center font-medium">
+                                                <CheckCircle size={18} className="mr-1" /> Concluído
+                                            </span>
+                                        ) : (
+                                            <button
+                                                onClick={() => handleTaskCompletion(subject.id, task.id, task.type)}
+                                                className="bg-primary text-white text-sm px-3 py-1 rounded-full hover:bg-primary/80 transition-colors"
+                                            >
+                                                {task.type === 'Exercícios' ? 'Rastrear & Concluir' : 'Concluir'}
+                                            </button>
+                                        )}
+                                    </div>
+                                );
+                            })
+                        ) : (
+                            <div className="bg-background p-4 rounded-lg text-text-secondary">
+                                <p>Nenhuma tarefa pendente agendada para hoje neste assunto.</p>
+                            </div>
+                        )
+                    )}
                   </div>
-                  {entry.subjects.length === 0 ? (
-                    <p className="text-textSecondary">Nenhum assunto agendado para este dia.</p>
-                  ) : (
-                    <ul className="list-none space-y-2 pl-0">
-                      {entry.subjects.map((subjectId) => {
-                        const subject = getSubjectDetails(subjectId);
-                        if (!subject) return null;
-                        const status = getSubjectStatus(subject);
-                        return (
-                          <li key={subjectId} className="text-textSecondary flex items-center">
-                            <BookOpen className="w-4 h-4 mr-2 text-primary" />
-                            {subject.name}
-                            {subject.materia && (
-                              <span className="ml-2 text-textSecondary text-xs bg-background px-1 py-0.5 rounded-md border border-border">
-                                <FileText className="inline-block w-3 h-3 mr-1" /> {subject.materia}
-                              </span>
-                            )}
-                            {status.text && (
-                              <span className={`ml-2 text-sm flex items-center ${status.color}`}>
-                                {status.icon} {status.text}
-                              </span>
-                            )}
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  )}
-                </div>
-              ))}
-            </div>
-          </>
+                );
+            })}
+          </div>
         )}
-      </Card>
+      </div>
+
+      {modalOpen && selectedTask && (
+        <ExerciseTrackingModal
+          task={selectedTask.task}
+          subjectId={selectedTask.subjectId}
+          subjectName={selectedTask.subjectName}
+          onClose={() => setModalOpen(false)}
+        />
+      )}
     </div>
   );
 };

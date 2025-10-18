@@ -1,54 +1,27 @@
-import React, { useState } from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { StudyProvider } from './context/StudyContext';
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import ImportSubjects from './pages/ImportSubjects';
-import Configuration from './pages/Configuration';
-import ProgressReview from './pages/ProgressReview';
 import Schedule from './pages/Schedule';
-import ReviewModal from './components/ReviewModal';
-import QuestionControlModal from './components/QuestionControlModal';
-import { Subject } from './context/StudyContext';
+import ProgressReview from './pages/ProgressReview';
+import Configuration from './pages/Configuration';
 
 const App: React.FC = () => {
-  const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
-  const [isQuestionControlModalOpen, setIsQuestionControlModalOpen] = useState(false);
-  const [selectedSubjectForQuestions, setSelectedSubjectForQuestions] = useState<Subject | null>(null);
-
-  const openReviewModal = () => setIsReviewModalOpen(true);
-  const closeReviewModal = () => setIsReviewModalOpen(false);
-
-  const openQuestionControlModal = (subject: Subject) => {
-    setSelectedSubjectForQuestions(subject);
-    setIsQuestionControlModalOpen(true);
-  };
-  const closeQuestionControlModal = () => {
-    setSelectedSubjectForQuestions(null);
-    setIsQuestionControlModalOpen(false);
-  };
-
   return (
     <Router>
-      <StudyProvider>
-        <Layout openReviewModal={openReviewModal}>
-          <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/importar-assuntos" element={<ImportSubjects />} />
-            <Route path="/configuracao" element={<Configuration />} />
-            <Route path="/progresso" element={<ProgressReview openQuestionControlModal={openQuestionControlModal} />} />
-            <Route path="/cronograma" element={<Schedule />} />
-            {/* Rota /dashboard removida */}
-          </Routes>
-        </Layout>
-
-        <ReviewModal isOpen={isReviewModalOpen} onClose={closeReviewModal} />
-        <QuestionControlModal
-          isOpen={isQuestionControlModalOpen}
-          onClose={closeQuestionControlModal}
-          subject={selectedSubjectForQuestions}
-        />
-      </StudyProvider>
+      <Layout>
+        <Routes>
+          {/* Rota raiz que corresponde ao link "Importar Matérias" no Sidebar */}
+          <Route path="/" element={<ImportSubjects />} />
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/cronograma" element={<Schedule />} />
+          <Route path="/progresso" element={<ProgressReview />} />
+          <Route path="/configuracao" element={<Configuration />} />
+          {/* Fallback */}
+          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+        </Routes>
+      </Layout>
     </Router>
   );
 };

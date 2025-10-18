@@ -1,92 +1,88 @@
-import React, { useState, useEffect } from 'react';
-import { useStudy } from '../context/StudyContext';
-import Card from '../components/Card';
-import { PlayCircle, Save } from 'lucide-react';
+import React from 'react';
+import { Settings, User, Bell, Database } from 'lucide-react';
 
 const Configuration: React.FC = () => {
-  const { config, updateConfig, generateSchedule } = useStudy();
-  const [startDate, setStartDate] = useState(config.startDate);
-  const [endDate, setEndDate] = useState(config.endDate);
-  const [dailyStudyHours, setDailyStudyHours] = useState(config.dailyStudyHours);
-
-  useEffect(() => {
-    setStartDate(config.startDate);
-    setEndDate(config.endDate);
-    setDailyStudyHours(config.dailyStudyHours);
-  }, [config]);
-
-  const handleSaveConfig = () => {
-    updateConfig({ startDate, endDate, dailyStudyHours: Number(dailyStudyHours) });
-    alert('Configuração salva com sucesso!');
-  };
-
-  const handleGenerateSchedule = () => {
-    handleSaveConfig(); // Ensure config is saved before generating
-    generateSchedule();
-    alert('Cronograma gerado com base nas suas configurações!');
-  };
-
   return (
-    <div className="animate-fade-in">
-      <h1 className="text-4xl font-bold text-text mb-8">Configuração de Estudo</h1>
-      <Card title="Definir Período e Horas de Estudo">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-          <div>
-            <label htmlFor="startDate" className="block text-textSecondary text-sm font-medium mb-2">
-              Data de Início
-            </label>
-            <input
-              type="date"
-              id="startDate"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="w-full p-3 bg-background border border-border rounded-xl text-text focus:outline-none focus:ring-2 focus:ring-primary transition-all duration-200"
-            />
+    <div className="space-y-8">
+      <h1 className="text-4xl font-extrabold text-text border-b border-border-color pb-4 flex items-center">
+        <Settings className="mr-3 text-primary" size={32} />
+        Configurações do Sistema
+      </h1>
+
+      <div className="bg-surface p-6 rounded-xl shadow-lg border border-border-color space-y-6">
+        
+        {/* Seção de Perfil - AGORA COM NOME E EMAIL */}
+        <div className="border-b border-border-color pb-6">
+          <h2 className="text-2xl font-semibold text-text mb-4 flex items-center">
+            <User className="mr-2 text-secondary" size={20} />
+            Perfil e Conta
+          </h2>
+          <p className="text-text-secondary mb-4">Gerencie suas informações pessoais e preferências de login.</p>
+          
+          <div className="space-y-4 max-w-md">
+            {/* Campo Nome */}
+            <div>
+              <label htmlFor="name" className="block text-sm font-medium text-text-secondary mb-1">Nome Completo</label>
+              <input
+                type="text"
+                id="name"
+                defaultValue="Usuário Bolt"
+                className="w-full p-3 rounded-lg bg-background border border-border-color text-text focus:border-primary focus:ring-primary transition-colors placeholder:text-text-secondary/50"
+                placeholder="Seu nome"
+              />
+            </div>
+
+            {/* Campo Email */}
+            <div>
+              <label htmlFor="email" className="block text-sm font-medium text-text-secondary mb-1">Email</label>
+              <input
+                type="email"
+                id="email"
+                defaultValue="usuario.bolt@stackblitz.com"
+                className="w-full p-3 rounded-lg bg-background border border-border-color text-text focus:border-primary focus:ring-primary transition-colors placeholder:text-text-secondary/50"
+                placeholder="seu.email@exemplo.com"
+              />
+            </div>
+
+            <button className="mt-4 w-full bg-primary text-white p-3 rounded-lg font-semibold hover:bg-primary/90 transition-colors shadow-lg shadow-primary/30">
+              Salvar Alterações
+            </button>
           </div>
-          <div>
-            <label htmlFor="endDate" className="block text-textSecondary text-sm font-medium mb-2">
-              Data de Término
-            </label>
-            <input
-              type="date"
-              id="endDate"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              className="w-full p-3 bg-background border border-border rounded-xl text-text focus:outline-none focus:ring-2 focus:ring-primary transition-all duration-200"
-            />
+        </div>
+
+        {/* Seção de Notificações */}
+        <div className="border-b border-border-color pb-4">
+          <h2 className="text-2xl font-semibold text-text mb-3 flex items-center">
+            <Bell className="mr-2 text-accent" size={20} />
+            Notificações
+          </h2>
+          <div className="flex justify-between items-center py-2">
+            <span className="text-text-secondary">Receber lembretes de estudo</span>
+            <input type="checkbox" defaultChecked className="h-5 w-5 rounded text-primary focus:ring-primary bg-background border-border-color" />
+          </div>
+          <div className="flex justify-between items-center py-2">
+            <span className="text-text-secondary">Alertas de progresso de meta</span>
+            <input type="checkbox" className="h-5 w-5 rounded text-primary focus:ring-primary bg-background border-border-color" />
           </div>
         </div>
-        <div className="mb-6">
-          <label htmlFor="dailyHours" className="block text-textSecondary text-sm font-medium mb-2">
-            Horas Diárias de Estudo
-          </label>
-          <input
-            type="number"
-            id="dailyHours"
-            value={dailyStudyHours}
-            onChange={(e) => setDailyStudyHours(Number(e.target.value))}
-            min="0.5"
-            step="0.5"
-            className="w-full p-3 bg-background border border-border rounded-xl text-text focus:outline-none focus:ring-2 focus:ring-primary transition-all duration-200"
-          />
+
+        {/* Seção de Dados */}
+        <div>
+          <h2 className="text-2xl font-semibold text-text mb-3 flex items-center">
+            <Database className="mr-2 text-primary" size={20} />
+            Gerenciamento de Dados
+          </h2>
+          <p className="text-text-secondary mb-4">Faça backup ou restaure seus dados de estudo.</p>
+          <div className="flex space-x-4">
+            <button className="bg-secondary text-white p-2 rounded-lg font-semibold hover:bg-secondary/80 transition-colors">
+              Exportar Dados
+            </button>
+            <button className="bg-error text-white p-2 rounded-lg font-semibold hover:bg-error/80 transition-colors">
+              Limpar Dados
+            </button>
+          </div>
         </div>
-        <div className="flex flex-col sm:flex-row gap-4">
-          <button
-            onClick={handleSaveConfig}
-            className="flex-1 bg-primary text-white py-3 px-6 rounded-xl text-lg font-semibold hover:bg-primary-dark transition-all duration-300 flex items-center justify-center shadow-lg hover:shadow-glow-primary"
-          >
-            <Save className="w-5 h-5 mr-2" />
-            Salvar Configuração
-          </button>
-          <button
-            onClick={handleGenerateSchedule}
-            className="flex-1 bg-secondary text-white py-3 px-6 rounded-xl text-lg font-semibold hover:bg-secondary-dark transition-all duration-300 flex items-center justify-center shadow-lg hover:shadow-glow-secondary"
-          >
-            <PlayCircle className="w-5 h-5 mr-2" />
-            Gerar Cronograma
-          </button>
-        </div>
-      </Card>
+      </div>
     </div>
   );
 };

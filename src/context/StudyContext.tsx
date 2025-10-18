@@ -1,262 +1,313 @@
-import React, { createContext, useState, useContext, ReactNode, useCallback } from 'react';
-import { v4 as uuidv4 } from 'uuid';
+import React, { createContext, useState, useContext, ReactNode, useCallback, useEffect } from 'react';
+import { StudyContextType, Subject, Task, Revision, ExerciseTracking, TaskType, UserSettings } from '../types';
 import useLocalStorage from '../hooks/useLocalStorage';
+import { 
+  saveSubjectsToSupabase, 
+  loadSubjectsFromSupabase, 
+  saveUserSettingsToSupabase, 
+  loadUserSettingsFromSupabase,
+  updateTaskInSupabase
+} from '../lib/supabaseService';
 
-// Tipos de dados
-export interface Subject {
-  id: string;
-  name: string;
-  materia: string; // Novo campo para organizar por matéria
-  completed: boolean; // Overall completion
-  lastStudied: string | null; // YYYY-MM-DD
-  nextReview: string | null; // YYYY-MM-DD
-  reviewInterval: number; // days (for spaced repetition: 0, 1, 7, 15, 30)
-  history: { date: string; type: 'study' | 'review' }[];
+// --- Helpers de Simulação de IA e Lógica ---
 
-  // New progress fields
-  videoCompleted: boolean;
-  pdfCompleted: boolean;
-  exercisesCompleted: boolean;
-  questionsMade: number;
-  correctAnswers: number;
-  accuracy: number; // Derived: correctAnswers / questionsMade * 100
-  questionHistory: { date: string; made: number; correct: number; }[]; // Histórico de questões por dia
-}
+const COLORS = ['#9E7FFF', '#38bdf8', '#f472b6', '#10b981', '#f59e0b'];
 
-export interface StudyConfig {
-  startDate: string; // YYYY-MM-DD
-  endDate: string; // YYYY-MM-DD
-  dailyStudyHours: number;
-}
+// Atualizado para incluir scheduled_date
+const generateTasks = (subjectName: string, totalHours: number, startDate: string): Task[] => {
+  const tasks: Task[] = [];
+  const tasksPerModule = 3;
+  const totalModules = 5;
+  const totalTasks = totalModules * tasksPerModule;
+  const plannedDurationPerTask = Math.floor((totalHours * 60) / totalTasks);
 
-export interface ScheduleEntry {
-  date: string; // YYYY-MM-DD
-  subjects: string[]; // Subject IDs
-}
+  const baseDate = new Date(startDate);
 
-// Context Type
-interface StudyContextType {
-  subjects: Subject[];
-  config: StudyConfig;
-  schedule: ScheduleEntry[];
-  importSubjects: (subjectNames: string[], materia: string) => void; // Adicionado materia
-  removeSubject: (id: string) => void;
-  updateConfig: (newConfig: StudyConfig) => void;
-  generateSchedule: () => void;
-  updateSubjectProgress: (id: string, progress: Partial<Subject>) => void;
-  recordStudySession: (id: string) => void;
-  scheduleNextReview: (id: string) => void;
-  getSubjectsForReview: (date: string) => Subject[];
-  clearSchedule: () => void; // Nova função
-  clearScheduleDay: (date: string) => void; // Nova função
-}
+  for (let i = 1; i <= totalModules; i++) {
+    // Simulação de agendamento sequencial
+    const scheduledDate = new Date(baseDate);
+    scheduledDate.setDate(baseDate.getDate() + Math.floor(i / 2)); // Agenda tarefas em dias diferentes
 
-// Valores iniciais
-const initialConfig: StudyConfig = {
-  startDate: new Date().toISOString().split('T')[0],
-  endDate: new Date(new Date().setMonth(new Date().getMonth() + 3)).toISOString().split('T')[0],
-  dailyStudyHours: 2,
+    tasks.push({
+      id: `v-${subjectName}-${i}-${Date.now()}`,
+      type: 'Video Aula',
+      status: 'pending',
+      planned_duration_minutes: plannedDurationPerTask,
+      scheduled_date: scheduledDate.toISOString().split('T')[0],
+    });
+    tasks.push({
+      id: `p-${subjectName}-${i}-${Date.now() + 1}`,
+      type: 'PDF',
+      status: 'pending',
+      planned_duration_minutes: Math.floor(plannedDurationPerTask * 0.7),
+      scheduled_date: scheduledDate.toISOString().split('T')[0],
+    });
+    tasks.push({
+      id: `e-${subjectName}-${i}-${Date.now() + 2}`,
+      type: 'Exercícios',
+      status: 'pending',
+      planned_duration_minutes: Math.floor(plannedDurationPerTask * 1.3),
+      scheduled_date: scheduledDate.toISOString().split('T')[0],
+    });
+  }
+  return tasks;
 };
+
+const generateRevisions = (subjectId: string, subjectName: string): Revision[] => {
+  const cycles: (1 | 7 | 15 | 30)[] = [1, 7, 15, 30];
+  
+  return cycles.map((day) => {
+    const dueDate = new Date();
+    dueDate.setDate(dueDate.getDate() + day);
+    return {
+      id: `rev-${subjectId}-${day}-${Date.now()}`,
+      subject_id: subjectId,
+      subject_name: subjectName,
+      due_date: dueDate.toISOString().split('T')[0],
+      cycle_day: day,
+      status: 'pending',
+    };
+  });
+};
+
+// --- Mock Data Inicial (Fallback) ---
+
+const initialSubjects: Subject[] = [
+  {
+    id: 's1',
+    name: 'Matemática Avançada',
+    edital: 'Concurso Federal 2025',
+    weeklyFrequency: 5,
+    hoursPerDay: 2,
+    maxHoursPerSession: 1.5,
+    daysUntilExam: 150,
+    tasks: [
+      { id: 't1a', type: 'Video Aula', status: 'completed', planned_duration_minutes: 40, scheduled_date: '2025-08-01' },
+      { id: 't1b', type: 'PDF', status: 'completed', planned_duration_minutes: 20, scheduled_date: '2025-08-01' },
+      { id: 't1c', type: 'Exercícios', status: 'completed', planned_duration_minutes: 60, scheduled_date: '2025-08-02', tracking: { questions_made: 50, questions_hit: 42, score_percentage: 84 } },
+      { id: 't2a', type: 'Video Aula', status: 'pending', planned_duration_minutes: 40, scheduled_date: '2025-08-03' },
+      { id: 't2b', type: 'PDF', status: 'pending', planned_duration_minutes: 20, scheduled_date: '2025-08-03' },
+      { id: 't2c', type: 'Exercícios', status: 'pending', planned_duration_minutes: 60, scheduled_date: '2025-08-04' },
+    ],
+    progress_percentage: 33,
+    overall_score: 84,
+    color: COLORS[0],
+  },
+  {
+    id: 's2',
+    name: 'Desenvolvimento Web',
+    edital: 'Certificação React Pro',
+    weeklyFrequency: 4,
+    hoursPerDay: 3,
+    maxHoursPerSession: 2,
+    daysUntilExam: 90,
+    tasks: [
+      { id: 't3a', type: 'Video Aula', status: 'completed', planned_duration_minutes: 90, scheduled_date: '2025-08-01' },
+      { id: 't3b', type: 'PDF', status: 'pending', planned_duration_minutes: 45, scheduled_date: '2025-08-05' },
+      { id: 't3c', type: 'Exercícios', status: 'pending', planned_duration_minutes: 90, scheduled_date: '2025-08-06' },
+    ],
+    progress_percentage: 10,
+    overall_score: 0,
+    color: COLORS[1],
+  },
+];
+
+const initialRevisions: Revision[] = [
+  { id: 'r1', subject_id: 's1', subject_name: 'Matemática Avançada', due_date: new Date(Date.now() + 86400000).toISOString().split('T')[0], cycle_day: 1, status: 'pending' },
+  { id: 'r2', subject_id: 's1', subject_name: 'Matemática Avançada', due_date: new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0], cycle_day: 7, status: 'pending' },
+];
+
+const initialSettings: UserSettings = {
+  studyStartTime: "08:00:00",
+  studyEndTime: "12:00:00",
+  breakDurationMinutes: 15,
+};
+
+
+// --- Context Implementation ---
 
 const StudyContext = createContext<StudyContextType | undefined>(undefined);
 
 export const StudyProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [subjects, setSubjects] = useLocalStorage<Subject[]>('study_subjects', []);
-  const [config, setConfig] = useLocalStorage<StudyConfig>('study_config', initialConfig);
-  const [schedule, setSchedule] = useLocalStorage<ScheduleEntry[]>('study_schedule', []);
+  // Revisions ainda usa localStorage, pois não foi incluído no schema Supabase
+  const [revisions, setRevisions] = useLocalStorage<Revision[]>('study_revisions', initialRevisions);
+  
+  // Subjects e Settings agora são gerenciados internamente e persistidos via Supabase
+  const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [settings, setSettings] = useState<UserSettings>(initialSettings);
+  const [loading, setLoading] = useState(true);
 
-  const importSubjects = useCallback((subjectNames: string[], materia: string) => {
-    const newSubjects: Subject[] = subjectNames.map(name => ({
-      id: uuidv4(),
+  // Efeito para carregar dados do Supabase na inicialização
+  useEffect(() => {
+    const loadData = async () => {
+      setLoading(true);
+      
+      const supabaseSubjects = await loadSubjectsFromSupabase();
+      if (supabaseSubjects.length > 0) {
+        // Recalcula métricas após carregar do DB
+        const calculatedSubjects = supabaseSubjects.map(calculateSubjectMetrics);
+        setSubjects(calculatedSubjects);
+      } else {
+        // Fallback para mock data se o Supabase estiver vazio (primeiro uso)
+        setSubjects(initialSubjects.map(calculateSubjectMetrics));
+      }
+      
+      const supabaseSettings = await loadUserSettingsFromSupabase();
+      if (supabaseSettings) {
+        setSettings(supabaseSettings);
+      }
+      
+      setLoading(false);
+    };
+    loadData();
+  }, []);
+
+
+  const calculateSubjectMetrics = useCallback((subject: Subject): Subject => {
+    const totalTasks = subject.tasks.length;
+    const completedTasks = subject.tasks.filter(t => t.status === 'completed').length;
+    const progress_percentage = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+
+    const completedExercises = subject.tasks.filter(t => t.type === 'Exercícios' && t.status === 'completed' && t.tracking);
+    const totalScores = completedExercises.reduce((sum, t) => sum + (t.tracking?.score_percentage || 0), 0);
+    const overall_score = completedExercises.length > 0 ? Math.round(totalScores / completedExercises.length) : 0;
+
+    // Mantém a cor existente ou atribui uma nova se for um novo assunto
+    const color = subject.color || COLORS[subjects.length % COLORS.length];
+
+    return { ...subject, progress_percentage, overall_score, color };
+  }, [subjects.length]);
+
+  // Refatorado para usar os novos parâmetros de planejamento
+  const addSubject = useCallback(async (name: string, edital: string, deadline: string, dailyTime: number, daysPerWeek: number, maxHoursPerSession: number) => {
+    
+    // 1. Cálculo de dias até o exame
+    const today = new Date();
+    const examDate = new Date(deadline);
+    const diffTime = examDate.getTime() - today.getTime();
+    const daysUntilExam = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    const totalHours = Math.max(40, dailyTime * daysPerWeek * 4); 
+    const newTasks = generateTasks(name, totalHours, today.toISOString().split('T')[0]);
+
+    const newSubject: Subject = {
+      id: `s-${Date.now()}`,
       name,
-      materia: materia || 'Geral', // Define 'Geral' se nenhuma matéria for fornecida
-      completed: false,
-      lastStudied: null,
-      nextReview: null,
-      reviewInterval: 0, // Initial interval
-      history: [],
-      videoCompleted: false,
-      pdfCompleted: false,
-      exercisesCompleted: false,
-      questionsMade: 0,
-      correctAnswers: 0,
-      accuracy: 0,
-      questionHistory: [], // Inicializa o histórico de questões
-    }));
-    setSubjects(prev => [...prev, ...newSubjects]);
-  }, [setSubjects]);
+      edital,
+      weeklyFrequency: daysPerWeek,
+      hoursPerDay: dailyTime,
+      maxHoursPerSession,
+      daysUntilExam: Math.max(0, daysUntilExam),
+      
+      tasks: newTasks,
+      progress_percentage: 0,
+      overall_score: 0,
+      color: COLORS[subjects.length % COLORS.length],
+    };
+    
+    const updatedSubjects = [...subjects, newSubject];
+    setSubjects(updatedSubjects.map(calculateSubjectMetrics));
+    
+    // Persistência
+    await saveSubjectsToSupabase(updatedSubjects);
 
-  const removeSubject = useCallback((id: string) => {
-    setSubjects(prev => prev.filter(s => s.id !== id));
-  }, [setSubjects]);
+  }, [subjects, calculateSubjectMetrics]);
 
-  const updateConfig = useCallback((newConfig: StudyConfig) => {
-    setConfig(newConfig);
-  }, [setConfig]);
+  const updateTaskStatus = useCallback(async (subjectId: string, taskId: string, status: 'completed' | 'pending', tracking?: ExerciseTracking) => {
+    let updatedTask: Task | null = null;
 
-  const updateSubjectProgress = useCallback((id: string, progress: Partial<Subject>) => {
-    setSubjects(prev =>
-      prev.map(s => {
-        if (s.id === id) {
-          const updatedSubject = { ...s, ...progress };
-          const today = new Date().toISOString().split('T')[0];
-
-          // Recalculate accuracy if questionsMade or correctAnswers changed
-          if (progress.questionsMade !== undefined || progress.correctAnswers !== undefined) {
-            const qMade = updatedSubject.questionsMade;
-            const cAnswers = updatedSubject.correctAnswers;
-            updatedSubject.accuracy = qMade > 0 ? Math.round((cAnswers / qMade) * 100) : 0;
-
-            // Update question history for today
-            const existingEntryIndex = updatedSubject.questionHistory.findIndex(entry => entry.date === today);
-            if (existingEntryIndex !== -1) {
-              updatedSubject.questionHistory[existingEntryIndex] = {
-                date: today,
-                made: qMade,
-                correct: cAnswers,
-              };
-            } else {
-              updatedSubject.questionHistory.push({
-                date: today,
-                made: qMade,
-                correct: cAnswers,
-              });
+    const updatedSubjects = subjects.map(subject => {
+      if (subject.id === subjectId) {
+        const updatedTasks = subject.tasks.map(task => {
+          if (task.id === taskId) {
+            const isExercise = task.type === 'Exercícios';
+            let newTracking = task.tracking;
+            
+            if (isExercise && status === 'completed' && tracking) {
+              const score = tracking.questions_made > 0 ? Math.round((tracking.questions_hit / tracking.questions_made) * 100) : 0;
+              newTracking = { ...tracking, score_percentage: score };
             }
+
+            updatedTask = { ...task, status, tracking: newTracking };
+            return updatedTask;
           }
-          // Check for overall completion
-          updatedSubject.completed = updatedSubject.videoCompleted && updatedSubject.pdfCompleted && updatedSubject.exercisesCompleted;
-          return updatedSubject;
+          return task;
+        });
+
+        const updatedSubject = calculateSubjectMetrics({ ...subject, tasks: updatedTasks });
+        
+        // Lógica de Revisão: Se o assunto acabou de ser concluído (100%), agendar revisões.
+        const wasCompleted = updatedSubject.tasks.every(t => t.status === 'completed');
+        const isNewCompletion = wasCompleted && updatedSubject.progress_percentage === 100 && subject.progress_percentage < 100;
+
+        if (isNewCompletion) {
+            setRevisions(prevRevisions => [
+                ...prevRevisions,
+                ...generateRevisions(updatedSubject.id, updatedSubject.name)
+            ]);
         }
-        return s;
-      })
-    );
-  }, [setSubjects]);
 
-  const recordStudySession = useCallback((id: string) => {
-    setSubjects(prev =>
-      prev.map(s => {
-        if (s.id === id) {
-          const today = new Date().toISOString().split('T')[0];
-          return {
-            ...s,
-            lastStudied: today,
-            history: [...s.history, { date: today, type: 'study' }],
-          };
-        }
-        return s;
-      })
-    );
-  }, [setSubjects]);
+        return updatedSubject;
+      }
+      return subject;
+    });
 
-  const scheduleNextReview = useCallback((id: string) => {
-    setSubjects(prev =>
-      prev.map(s => {
-        if (s.id === id) {
-          const today = new Date();
-          let newInterval = 0;
-          // Spaced repetition intervals: 1, 7, 15, 30 days
-          if (s.reviewInterval === 0) newInterval = 1;
-          else if (s.reviewInterval === 1) newInterval = 7;
-          else if (s.reviewInterval === 7) newInterval = 15;
-          else if (s.reviewInterval === 15) newInterval = 30;
-          else newInterval = 30; // Cap at 30 days
+    setSubjects(updatedSubjects);
+    
+    // Persistência: Atualiza apenas a tarefa modificada no Supabase
+    if (updatedTask) {
+        await updateTaskInSupabase(subjectId, updatedTask);
+    }
+    // Nota: Não salvamos todos os subjects aqui, pois a atualização de status é granular.
+    // Apenas a criação de subject salva o objeto completo.
 
-          const nextReviewDate = new Date(today);
-          nextReviewDate.setDate(today.getDate() + newInterval);
+  }, [calculateSubjectMetrics, subjects, setRevisions]);
 
-          return {
-            ...s,
-            reviewInterval: newInterval,
-            nextReview: nextReviewDate.toISOString().split('T')[0],
-            history: [...s.history, { date: today.toISOString().split('T')[0], type: 'review' }],
-          };
-        }
-        return s;
-      })
-    );
-  }, [setSubjects]);
+  const completeRevision = useCallback((revisionId: string) => {
+    setRevisions(prev => prev.map(r => r.id === revisionId ? { ...r, status: 'completed' } : r));
+  }, [setRevisions]);
 
-  const getSubjectsForReview = useCallback((date: string): Subject[] => {
-    return subjects.filter(s => s.nextReview && s.nextReview <= date && !s.completed);
+  const getSubjectTasksForDay = useCallback((date: string) => {
+    const activeSubjects = subjects.filter(s => s.progress_percentage < 100);
+
+    if (activeSubjects.length === 0) return [];
+
+    const dailySchedule = activeSubjects.map(subject => {
+        // Filtra tarefas agendadas para a data específica
+        const dailyTasks = subject.tasks.filter(t => t.status === 'pending' && t.scheduled_date === date);
+        
+        if (dailyTasks.length === 0) return null;
+
+        return {
+            subjectName: subject.name,
+            tasks: dailyTasks
+        };
+    }).filter((item): item is { subjectName: string, tasks: Task[] } => item !== null);
+
+    return dailySchedule;
   }, [subjects]);
-
-  const generateSchedule = useCallback(() => {
-    const newSchedule: ScheduleEntry[] = [];
-    const start = new Date(config.startDate);
-    const end = new Date(config.endDate);
-    const availableSubjects = subjects.filter(s => !s.completed); // Only schedule incomplete subjects
-    const subjectsPerDay = Math.floor(config.dailyStudyHours); // How many subjects can fit in a day (e.g., 2 hours = 2 subjects)
-
-    if (availableSubjects.length === 0 || subjectsPerDay <= 0) {
-      setSchedule([]);
-      return;
-    }
-
-    let subjectQueue = [...availableSubjects]; // Use a queue for round-robin
-    let reviewQueue = availableSubjects.filter(s => s.nextReview && s.nextReview <= new Date().toISOString().split('T')[0]);
-
-    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-      const dateString = d.toISOString().split('T')[0];
-      const subjectsForThisDay: string[] = [];
-      const currentDayReviewSubjects = availableSubjects.filter(s => s.nextReview && s.nextReview <= dateString && !s.completed);
-
-      // Prioritize subjects due for review for the current day
-      for (const sub of currentDayReviewSubjects) {
-        if (subjectsForThisDay.length < subjectsPerDay && !subjectsForThisDay.includes(sub.id)) {
-          subjectsForThisDay.push(sub.id);
-        }
-      }
-
-      // Fill remaining slots with other available subjects (round-robin)
-      let attempts = 0;
-      while (subjectsForThisDay.length < subjectsPerDay && attempts < availableSubjects.length * 2) { // Prevent infinite loop
-        if (subjectQueue.length === 0) {
-          subjectQueue = [...availableSubjects]; // Reset queue if exhausted
-        }
-        const nextSubject = subjectQueue.shift(); // Get next subject from queue
-
-        if (nextSubject && !subjectsForThisDay.includes(nextSubject.id) && !nextSubject.completed) {
-          subjectsForThisDay.push(nextSubject.id);
-        } else if (nextSubject) {
-          subjectQueue.push(nextSubject); // Put it back if not scheduled
-        }
-        attempts++;
-      }
-
-      if (subjectsForThisDay.length > 0) {
-        newSchedule.push({ date: dateString, subjects: subjectsForThisDay });
-      }
-    }
-    setSchedule(newSchedule);
-  }, [config, subjects, setSchedule]);
-
-  // Novas funções para limpar o cronograma
-  const clearSchedule = useCallback(() => {
-    setSchedule([]);
-  }, [setSchedule]);
-
-  const clearScheduleDay = useCallback((date: string) => {
-    setSchedule(prev => prev.filter(entry => entry.date !== date));
-  }, [setSchedule]);
+  
+  const updateSettings = useCallback(async (newSettings: UserSettings) => {
+    setSettings(newSettings);
+    await saveUserSettingsToSupabase(newSettings);
+  }, []);
 
 
-  const value = {
-    subjects,
-    config,
-    schedule,
-    importSubjects,
-    removeSubject,
-    updateConfig,
-    generateSchedule,
-    updateSubjectProgress,
-    recordStudySession,
-    scheduleNextReview,
-    getSubjectsForReview,
-    clearSchedule, // Adicionado ao contexto
-    clearScheduleDay, // Adicionado ao contexto
-  };
-
-  return <StudyContext.Provider value={value}>{children}</StudyContext.Provider>;
+  return (
+    <StudyContext.Provider value={{ 
+      subjects, 
+      revisions, 
+      settings,
+      loading, 
+      addSubject, 
+      updateTaskStatus, 
+      completeRevision,
+      getSubjectTasksForDay,
+      updateSettings
+    }}>
+      {children}
+    </StudyContext.Provider>
+  );
 };
 
 export const useStudy = () => {
